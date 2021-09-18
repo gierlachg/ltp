@@ -1,0 +1,21 @@
+[package]
+name = "ltp-server"
+version = "0.0.1"
+description = "LTP (Line Transfer Protocol) Server"
+authors = ["Grzegorz Gierlach <gierlachg@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+clap = "2"
+
+log = "0.4"
+log4rs = "1"
+
+thiserror = "1"
+
+async-trait = "0.1"
+
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.6", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
