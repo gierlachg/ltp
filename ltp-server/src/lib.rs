@@ -10,7 +10,8 @@ use crate::control::GroundControl;
 use crate::protocol::{Protocol, StringProtocol};
 use crate::storage::Storage;
 use crate::tcp::{Connection, Connections, StringConnections};
-use crate::Command::{ERRONEOUS, GET, QUIT, SHUTDOWN};
+use crate::Request::{ERRONEOUS, GET, QUIT, SHUTDOWN};
+use crate::Response::{ERROR, LINE};
 
 mod control;
 mod protocol;
@@ -77,8 +78,8 @@ impl<T, P: Protocol<T>, C: Connection<T>> Worker<T, P, C> {
                     self.control.signal_shutdown();
                     break;
                 }
-                GET(line_number) => self.storage.read(line_number).await,
-                ERRONEOUS => None,
+                GET(line_number) => self.storage.read(line_number).await.map_or(ERROR, |line| LINE(line)),
+                ERRONEOUS => ERROR,
             };
             let payload = self.protocol.encode(response);
             if let Err(_) = self.connection.write(payload).await {
@@ -88,11 +89,16 @@ impl<T, P: Protocol<T>, C: Connection<T>> Worker<T, P, C> {
     }
 }
 
-enum Command {
+enum Request {
     QUIT,
     SHUTDOWN,
     GET(u64),
     ERRONEOUS,
+}
+
+enum Response {
+    LINE(String),
+    ERROR,
 }
 
 #[derive(Error, Debug)]

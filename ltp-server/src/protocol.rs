@@ -1,9 +1,10 @@
-use crate::Command::{self, ERRONEOUS, GET, QUIT, SHUTDOWN};
+use crate::Request::{self, ERRONEOUS, GET, QUIT, SHUTDOWN};
+use crate::Response::{self, ERROR, LINE};
 
 pub(super) trait Protocol<T> {
-    fn decode(&self, input: T) -> Command;
+    fn decode(&self, request: T) -> Request;
 
-    fn encode(&self, line: Option<String>) -> T;
+    fn encode(&self, response: Response) -> T;
 }
 
 /// An implementation of string/line based client-server protocol.
@@ -17,8 +18,8 @@ impl StringProtocol {
 }
 
 impl Protocol<String> for StringProtocol {
-    fn decode(&self, s: String) -> Command {
-        match s.as_ref() {
+    fn decode(&self, request: String) -> Request {
+        match request.as_ref() {
             "QUIT" => QUIT,
             "SHUTDOWN" => SHUTDOWN,
             line if line.starts_with("GET ") => match line.split_once(" ") {
@@ -32,10 +33,13 @@ impl Protocol<String> for StringProtocol {
         }
     }
 
-    fn encode(&self, line: Option<String>) -> String {
-        line.map_or("ERR\r\n".to_string(), |mut line| {
-            line.insert_str(0, "OK\r\n");
-            line
-        })
+    fn encode(&self, response: Response) -> String {
+        match response {
+            LINE(mut line) => {
+                line.insert_str(0, "OK\r\n");
+                line
+            }
+            ERROR => "ERR\r\n".to_string(),
+        }
     }
 }
