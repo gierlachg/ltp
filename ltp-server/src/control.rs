@@ -1,3 +1,4 @@
+/// An utility helping with graceful shutdown of the system.
 #[derive(Clone)]
 pub(crate) struct GroundControl {
     signaler: tokio::sync::mpsc::UnboundedSender<()>,

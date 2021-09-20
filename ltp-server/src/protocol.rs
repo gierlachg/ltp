@@ -1,4 +1,4 @@
-use crate::Command::{self, ERRONEOUS, GET, QUIT, SHUTDOWN, UNKNOWN};
+use crate::Command::{self, ERRONEOUS, GET, QUIT, SHUTDOWN};
 
 pub(super) trait Protocol<T> {
     fn decode(&self, input: T) -> Command;
@@ -6,6 +6,7 @@ pub(super) trait Protocol<T> {
     fn encode(&self, line: Option<String>) -> T;
 }
 
+/// An implementation of string/line based client-server protocol.
 #[derive(Clone)]
 pub(super) struct StringProtocol;
 
@@ -21,13 +22,13 @@ impl Protocol<String> for StringProtocol {
             "QUIT" => QUIT,
             "SHUTDOWN" => SHUTDOWN,
             line if line.starts_with("GET ") => match line.split_once(" ") {
-                Some((_, line_number)) => match line_number.parse::<u64>() {
-                    Ok(line_number) => GET(line_number),
-                    Err(_) => ERRONEOUS,
+                Some((_, line_number)) => match line_number.parse::<i64>() {
+                    Ok(line_number) if line_number > 0 => GET(line_number as u64),
+                    _ => ERRONEOUS,
                 },
                 None => ERRONEOUS,
             },
-            _ => UNKNOWN,
+            _ => ERRONEOUS,
         }
     }
 

@@ -2,11 +2,10 @@ use std::error::Error;
 use std::fs;
 
 use clap::{App, Arg, ArgMatches};
-use log::{info, LevelFilter};
+use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 const LOGGING_CONFIGURATION_FILE_NAME: &str = "log4rs.yml";
 
 const ENDPOINT: &str = "127.0.0.1:10322";
@@ -16,18 +15,16 @@ const PATH: &str = "path";
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let arguments = parse_arguments();
     let path = arguments.value_of(PATH).unwrap();
-
+    
     init_logging();
 
-    info!("Initializing LTP server (version: {}).", VERSION);
     ltp_server::run(ENDPOINT.parse().expect("This is unexpected!"), path).await?;
-    info!("LTP server shut down.");
     Ok(())
 }
 
 fn parse_arguments() -> ArgMatches<'static> {
     App::new(env!("CARGO_PKG_DESCRIPTION"))
-        .version(VERSION)
+        .version(env!("CARGO_PKG_VERSION"))
         .arg(
             Arg::with_name(PATH)
                 .required(true)

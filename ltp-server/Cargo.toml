@@ -3,7 +3,7 @@ name = "ltp-server"
 version = "0.0.1"
 description = "LTP (Line Transfer Protocol) Server"
 authors = ["Grzegorz Gierlach <gierlachg@gmail.com>"]
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 clap = "2"

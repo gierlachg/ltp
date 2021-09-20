@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 
 use futures::SinkExt;
@@ -11,29 +10,9 @@ use tokio_util::codec::{Framed, LinesCodec};
 
 use crate::{GroundControl, LTPError};
 
-pub(super) struct Connections<T, C: Connection<T>, F: Fn(GroundControl, TcpStream) -> C> {
-    control: GroundControl,
-    connections: UnboundedReceiver<TcpStream>,
-    connection_factory: F,
-    _marker: PhantomData<T>,
-}
-
-impl<T, C: Connection<T>, F: Fn(GroundControl, TcpStream) -> C> Connections<T, C, F> {
-    pub(super) async fn bind(
-        endpoint: SocketAddr,
-        control: GroundControl,
-        connection_factory: F,
-    ) -> Result<Self, LTPError> {
-        let listener = TcpListener::bind(&endpoint).await?;
-        let (connections_tx, connections_rx) = mpsc::unbounded_channel(); // TODO: consider bounding the channel
-        Self::spawn_listener(listener, connections_tx, control.clone());
-        Ok(Connections {
-            control,
-            connections: connections_rx,
-            connection_factory,
-            _marker: PhantomData,
-        })
-    }
+#[async_trait::async_trait]
+pub(super) trait Connections<T, C: Connection<T>> {
+    async fn next_connection(&mut self) -> Option<C>;
 
     fn spawn_listener(listener: TcpListener, connections: UnboundedSender<TcpStream>, mut control: GroundControl) {
         spawn(async move {
@@ -49,15 +28,36 @@ impl<T, C: Connection<T>, F: Fn(GroundControl, TcpStream) -> C> Connections<T, C
             }
         });
     }
+}
 
-    pub(super) async fn next_connection(&mut self) -> Option<C> {
-        self.connections
-            .recv()
-            .await
-            .map(|stream| (self.connection_factory)(self.control.clone(), stream))
+pub(super) struct StringConnections {
+    control: GroundControl,
+    connections: UnboundedReceiver<TcpStream>,
+}
+
+impl StringConnections {
+    pub(super) async fn from(endpoint: SocketAddr, control: GroundControl) -> Result<Self, LTPError> {
+        let listener = TcpListener::bind(&endpoint).await?;
+        let (connections_tx, connections_rx) = mpsc::unbounded_channel(); // TODO: consider bounding the channel
+        Self::spawn_listener(listener, connections_tx, control.clone());
+        Ok(StringConnections {
+            control,
+            connections: connections_rx,
+        })
     }
 }
 
+#[async_trait::async_trait]
+impl Connections<String, StringConnection> for StringConnections {
+    async fn next_connection(&mut self) -> Option<StringConnection> {
+        self.connections
+            .recv()
+            .await
+            .map(|stream| StringConnection::new(self.control.clone(), stream))
+    }
+}
+
+// TODO: consider generic Connection over Tokio codec
 #[async_trait::async_trait]
 pub(super) trait Connection<T> {
     async fn read(&mut self) -> Option<T>;
