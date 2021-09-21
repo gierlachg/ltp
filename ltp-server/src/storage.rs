@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -29,6 +28,8 @@ impl Storage {
     }
 
     pub(super) async fn read(&self, line_number: u64) -> Option<String> {
+        assert!(line_number > 0);
+        let line_number = line_number - 1;
         let (indexed_line_number, offset) = self.index.resolve(line_number)?;
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
@@ -83,45 +84,42 @@ impl Storage {
     }
 }
 
-// 128 bytes (u64 + u64) * 500_000 ~= 64MB
-const MAX_NUMBER_OF_INDEXED_LINES: u64 = 500_000;
+const MAX_NUMBER_OF_INDEXED_LINES: usize = 1024 * 1024;
 
-/// Size limited index, mapping line numbers to their corresponding byte offsets on disk.
+/// Size limited (64 bytes * 1024 * 1024 = 64MB) index, mapping line numbers to their corresponding byte offsets on
+/// disk.
+// TODO: consider using u32 for smaller files
 #[derive(Clone)]
 struct Index {
-    entries: Arc<BTreeMap<u64, u64>>,
+    nth: u64,
+    entries: Arc<Vec<u64>>,
 }
 
 impl Index {
     fn index(path: &str) -> Result<Self, LTPError> {
         let number_of_lines = BufReader::new(File::open(path)?).lines().count();
-        let nth = u64::max(
-            1,
-            u64::try_from(number_of_lines).expect("Unable to convert") / MAX_NUMBER_OF_INDEXED_LINES,
-        );
+        let nth = usize::max(1, number_of_lines / MAX_NUMBER_OF_INDEXED_LINES);
 
-        let mut line_number = 0;
         let mut offset = 0;
-        let mut entries = BTreeMap::new();
-        for line in BufReader::new(File::open(path)?).lines() {
+        let mut entries = Vec::with_capacity(number_of_lines / nth);
+        for (line_number, line) in BufReader::new(File::open(path)?).lines().enumerate() {
             let line = line?;
             if line_number % nth == 0 {
-                entries.insert(line_number + 1, offset);
+                entries.push(offset);
             }
-            line_number += 1;
             offset += u64::try_from(line.len()).expect("Unable to convert") + 1;
         }
 
         Ok(Index {
+            nth: u64::try_from(nth).expect("Unable to convert"),
             entries: Arc::new(entries),
         })
     }
 
     /// Given line number, returns a tuple of a closest (less than or equal) indexed line number and its offset.
     fn resolve(&self, line_number: u64) -> Option<(u64, u64)> {
-        self.entries
-            .range(..=line_number)
-            .next_back()
-            .map(|(line_number, offset)| (*line_number, *offset))
+        let indexed_line_number = line_number - (line_number % self.nth);
+        let index = usize::try_from(indexed_line_number / self.nth).expect("Unable to convert");
+        self.entries.get(index).map(|offset| (indexed_line_number, *offset))
     }
 }
