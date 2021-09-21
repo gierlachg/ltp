@@ -44,8 +44,8 @@ impl Storage {
     fn find_line_offset(file: &File, from_offset: u64, line_number: u64) -> Option<u64> {
         let mut offset = from_offset;
         let mut lines_to_skip = line_number;
+        let mut bytes = vec![0u8; PAGE_SIZE];
         while lines_to_skip > 0 {
-            let mut bytes = vec![0u8; PAGE_SIZE];
             let bytes_read = file.read_at(&mut bytes, offset).ok()?;
             if bytes_read == 0 {
                 return None;
@@ -59,6 +59,7 @@ impl Storage {
                 index += 1;
                 offset += 1;
             }
+            bytes.fill(0u8);
         }
         Some(offset)
     }
