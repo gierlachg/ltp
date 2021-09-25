@@ -2,9 +2,9 @@ use std::net::SocketAddr;
 
 use futures::SinkExt;
 use log::warn;
+use tokio::{select, spawn};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::{select, spawn};
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
 
@@ -66,7 +66,6 @@ pub(super) trait Connection<T> {
 }
 
 pub(super) struct StringConnection {
-    closed: bool,
     control: GroundControl,
     lines: Framed<TcpStream, LinesCodec>,
 }
@@ -74,7 +73,6 @@ pub(super) struct StringConnection {
 impl StringConnection {
     pub(super) fn new(control: GroundControl, stream: TcpStream) -> Self {
         StringConnection {
-            closed: false,
             control,
             lines: Framed::new(stream, LinesCodec::new()), // TODO: consider setting max length
         }
@@ -84,16 +82,9 @@ impl StringConnection {
 #[async_trait::async_trait]
 impl Connection<String> for StringConnection {
     async fn read(&mut self) -> Option<String> {
-        if self.closed {
-            None
-        } else {
-            select! {
-                result = self.lines.next() => result.and_then(|result| result.ok()),
-                _ = self.control.await_shutdown() => {
-                    self.closed = true;
-                    None
-                },
-            }
+        select! {
+            result = self.lines.next() => result.and_then(|result| result.ok()),
+            _ = self.control.await_shutdown() => None
         }
     }
 
